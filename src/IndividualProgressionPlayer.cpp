@@ -44,19 +44,22 @@ public:
                 sIndividualProgression->ForceUpdateProgressionState(player, static_cast<ProgressionState>(13));
         }
 
-        if ((player->getRace() == RACE_DRAENEI || player->getRace() == RACE_BLOODELF) && sIndividualProgression->tbcRacesStartingProgression && !sIndividualProgression->hasPassedProgression(player, static_cast<ProgressionState>(sIndividualProgression->tbcRacesStartingProgression)))
+        if (!sIndividualProgression->isExcludedFromProgression(player) || !sIndividualProgression->excludeAccounts)
         {
-            sIndividualProgression->UpdateProgressionState(player, static_cast<ProgressionState>(sIndividualProgression->tbcRacesStartingProgression));
-        }
+            if ((player->getRace() == RACE_DRAENEI || player->getRace() == RACE_BLOODELF) && sIndividualProgression->tbcRacesStartingProgression && !sIndividualProgression->hasPassedProgression(player, static_cast<ProgressionState>(sIndividualProgression->tbcRacesStartingProgression)))
+            {
+                sIndividualProgression->UpdateProgressionState(player, static_cast<ProgressionState>(sIndividualProgression->tbcRacesStartingProgression));
+            }
 
-        if (player->getClass() == CLASS_DEATH_KNIGHT && sIndividualProgression->deathKnightStartingProgression && !sIndividualProgression->hasPassedProgression(player, static_cast<ProgressionState>(sIndividualProgression->deathKnightStartingProgression)))
-        {
-            sIndividualProgression->UpdateProgressionState(player, static_cast<ProgressionState>(sIndividualProgression->deathKnightStartingProgression));
-        }
+            if (player->getClass() == CLASS_DEATH_KNIGHT && sIndividualProgression->deathKnightStartingProgression && !sIndividualProgression->hasPassedProgression(player, static_cast<ProgressionState>(sIndividualProgression->deathKnightStartingProgression)))
+            {
+                sIndividualProgression->UpdateProgressionState(player, static_cast<ProgressionState>(sIndividualProgression->deathKnightStartingProgression));
+            }
 
-        if (sIndividualProgression->startingProgression && !sIndividualProgression->hasPassedProgression(player, static_cast<ProgressionState>(sIndividualProgression->startingProgression)))
-        {
-            sIndividualProgression->UpdateProgressionState(player, static_cast<ProgressionState>(sIndividualProgression->startingProgression));
+            if (sIndividualProgression->startingProgression && !sIndividualProgression->hasPassedProgression(player, static_cast<ProgressionState>(sIndividualProgression->startingProgression)))
+            {
+                sIndividualProgression->UpdateProgressionState(player, static_cast<ProgressionState>(sIndividualProgression->startingProgression));
+            }
         }
 
         sIndividualProgression->CheckAdjustments(player);
@@ -1153,14 +1156,20 @@ public:
         {
             return true;
         }
+
+        // Check if the account is excluded from progression (bots)
+        std::string accountName;
+        bool accountNameFound = AccountMgr::GetName(accountId, accountName);
+        std::regex excludedAccountsRegex(sIndividualProgression->excludedAccountsRegex);
+  
+        if (accountNameFound && std::regex_match(accountName, excludedAccountsRegex))
+			return true;
+
         uint8 highestProgression = sIndividualProgression->GetAccountProgression(accountId);
         if (charRace == RACE_DRAENEI || charRace == RACE_BLOODELF)
         {
-            if (sIndividualProgression->tbcRacesProgressionLevel)
-            {
-                if (highestProgression < sIndividualProgression->tbcRacesProgressionLevel)
-                    return false;
-            }
+            if (highestProgression < sIndividualProgression->tbcRacesProgressionLevel)
+                return false;
         }
         if (charClass == CLASS_DEATH_KNIGHT && sIndividualProgression->deathKnightProgressionLevel)
         {

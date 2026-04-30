@@ -4,6 +4,7 @@
 
 #include "IndividualProgression.h"
 #include "naxxramas_40.h"
+#include "ReputationMgr.h"
 
 IndividualProgression* IndividualProgression::instance()
 {
@@ -143,6 +144,45 @@ uint8 IndividualProgression::GetAccountProgression(uint32 accountId)
         } while (result->NextRow());
     }
     return progressionLevel;
+}
+
+void IndividualProgression::UpdateAccountReputation(uint32 factionId, uint32 accountId, Player* player)
+{
+    if (!factionId || !accountId || !player || !player->IsInWorld())
+        return;
+
+    Group* group = player->GetGroup();
+    uint32 account = player->GetSession()->GetAccountId();
+
+    if (!group)
+        return;
+
+    uint32 curRep = player->GetReputationMgr().GetReputation(factionId);
+    uint32 newRep = 0;
+
+    for (GroupReference* itr = group->GetFirstMember(); itr; itr = itr->next())
+    {
+        Player* member = itr->GetSource();
+        if (!member || member->GetSession()->GetAccountId() != accountId)
+            continue;
+
+        uint32 repAmount = member->GetReputationMgr().GetReputation(factionId);
+
+        if (repAmount > newRep)
+            newRep = repAmount;
+    }
+
+    // ChatHandler(player->GetSession()).PSendSysMessage("Current {} Reputation = {}", factionId, curRep);
+    // ChatHandler(player->GetSession()).PSendSysMessage("Highest {} Reputation = {}", factionId, newRep);
+
+    if (newRep > curRep)
+    {
+        std::string factionName = sFactionStore.LookupEntry(factionId)->name[0];
+        uint32 addRep = newRep - curRep;
+
+        player->GetReputationMgr().ModifyReputation(sFactionStore.LookupEntry(factionId), addRep);
+        ChatHandler(player->GetSession()).PSendSysMessage("Reputation with {} increased by {}.", factionName, addRep);
+    }
 }
 
 void IndividualProgression::RemovePlayerAchievement(uint16 playerGUID, uint16 achievementId)
@@ -742,37 +782,39 @@ void IndividualProgression::AwardEarnedVanillaPvpTitles(Player* player)
             { VanillaPvpKillRank1,  TitleData[RANK_ONE].TitleId[teamId]      },
 		};
 
-	    if (!hasPassedProgression(player, PROGRESSION_PRE_TBC) || VanillaPvpTitlesEarnPostVanilla)
+        int highestTitle = -1;
+
+        // add highest title
+        for (IppPvPTitles title : pvpTitlesList)
         {
-            int highestTitle = -1;
-
-            // add highest title
-            for (IppPvPTitles title : pvpTitlesList)
+            if (kills >= title.RequiredKills)
             {
-                if (kills >= title.RequiredKills)
-                {
-                    player->SetTitle(sCharTitlesStore.LookupEntry(title.TitleId));
-                    highestTitle = title.TitleId;
-                    break;
-                }
+                player->SetTitle(sCharTitlesStore.LookupEntry(title.TitleId));
+                highestTitle = title.TitleId;
+					
+                if (teamId == 0)
+                    player->SetByteValue(PLAYER_FIELD_BYTES, PLAYER_FIELD_BYTES_OFFSET_LIFETIME_MAX_PVP_RANK, title.TitleId + 4);
+                else // teamId == 1
+                    player->SetByteValue(PLAYER_FIELD_BYTES, PLAYER_FIELD_BYTES_OFFSET_LIFETIME_MAX_PVP_RANK, title.TitleId - 10);
+							
+                break;
             }
-
-			const uint32_t chosenTitleId = player->GetUInt32Value(PLAYER_CHOSEN_TITLE);
-			// PvP Titles go from 1 to 28.
-			const bool usesPvPTitle = chosenTitleId != 0 && chosenTitleId < 29;
-
-            // remove all titles except highest
-            for (IppPvPTitles title : pvpTitlesList)
-            {
-                const int titleId = title.TitleId;
-
-                if (highestTitle != titleId)
-                    player->SetTitle(sCharTitlesStore.LookupEntry(titleId), true);
-            }
-
-			if (highestTitle != -1 && usesPvPTitle)
-				player->SetCurrentTitle(sCharTitlesStore.LookupEntry(highestTitle));
         }
+
+        const uint32_t chosenTitleId = player->GetUInt32Value(PLAYER_CHOSEN_TITLE);
+        const bool usesPvPTitle = ((chosenTitleId != 0 && chosenTitleId < 29) || isExcludedFromProgression(player)); // PvP Titles go from 1 to 28.
+
+        // remove all titles except highest
+        for (IppPvPTitles title : pvpTitlesList)
+        {
+            const int titleId = title.TitleId;
+
+            if (highestTitle != titleId)
+                player->SetTitle(sCharTitlesStore.LookupEntry(titleId), true);
+        }
+
+        if (highestTitle != -1 && usesPvPTitle)
+            player->SetCurrentTitle(sCharTitlesStore.LookupEntry(highestTitle));
     }
 }
 
@@ -791,6 +833,7 @@ private:
         sIndividualProgression->requireNaxxStrath = sConfigMgr->GetOption<bool>("IndividualProgression.RequireNaxxStrathEntrance", false);
         sIndividualProgression->doableNaxx40Bosses = sConfigMgr->GetOption<bool>("IndividualProgression.doableNaxx40Bosses", false);
         sIndividualProgression->enforceGroupRules = sConfigMgr->GetOption<bool>("IndividualProgression.EnforceGroupRules", true);
+        sIndividualProgression->EnableSetRepCommand = sConfigMgr->GetOption<bool>("IndividualProgression.EnableSetRepCommand", false);
         sIndividualProgression->fishingFix = sConfigMgr->GetOption<bool>("IndividualProgression.FishingFix", true);
         sIndividualProgression->simpleConfigOverride = sConfigMgr->GetOption<bool>("IndividualProgression.SimpleConfigOverride", true);
         sIndividualProgression->progressionLimit = sConfigMgr->GetOption<uint8>("IndividualProgression.ProgressionLimit", 0);
@@ -806,8 +849,8 @@ private:
         sIndividualProgression->LoadCustomProgressionEntries(sConfigMgr->GetOption<std::string>("IndividualProgression.CustomProgression", ""));
         sIndividualProgression->earlyDungeonSet2 = sConfigMgr->GetOption<bool>("IndividualProgression.AllowEarlyDungeonSet2", false);
         sIndividualProgression->earlyScourgeBosses = sConfigMgr->GetOption<bool>("IndividualProgression.AllowEarlyScourgeBosses", false);
-		sIndividualProgression->tbcArenaSeason = sConfigMgr->GetOption<uint8>("IndividualProgression.TBC.ArenaSeason", 1);
-		sIndividualProgression->wotlkArenaSeason = sConfigMgr->GetOption<uint8>("IndividualProgression.WotLK.ArenaSeason", 5);
+        sIndividualProgression->tbcArenaSeason = sConfigMgr->GetOption<uint8>("IndividualProgression.TBC.ArenaSeason", 1);
+        sIndividualProgression->wotlkArenaSeason = sConfigMgr->GetOption<uint8>("IndividualProgression.WotLK.ArenaSeason", 5);
         sIndividualProgression->VanillaPvpKillRank1 = sConfigMgr->GetOption<uint32>("IndividualProgression.VanillaPvpKillRequirement.Rank1", 100);
         sIndividualProgression->VanillaPvpKillRank2 = sConfigMgr->GetOption<uint32>("IndividualProgression.VanillaPvpKillRequirement.Rank2", 200);
         sIndividualProgression->VanillaPvpKillRank3 = sConfigMgr->GetOption<uint32>("IndividualProgression.VanillaPvpKillRequirement.Rank3", 400);
@@ -829,6 +872,7 @@ private:
         sIndividualProgression->DisableQuestMarkers = sConfigMgr->GetOption<bool>("IndividualProgression.DisableQuestMarkers", true);
         sIndividualProgression->excludeAccounts = sConfigMgr->GetOption<bool>("IndividualProgression.ExcludeAccounts", true);
         sIndividualProgression->excludedAccountsRegex = sConfigMgr->GetOption<std::string>("IndividualProgression.ExcludedAccountsRegex", "^RNDBOT.*");
+        sIndividualProgression->sharedFactionIdsRegex = sConfigMgr->GetOption<std::string>("IndividualProgression.sharedFactionIdsRegex", "59|270|349|509|510|529|576|589|609|729|730|749|889|890|909");
         sIndividualProgression->ExcludedAccountsMaxLevel = sConfigMgr->GetOption<uint8>("IndividualProgression.ExcludedAccountsMaxLevel", 80);
     }
 
