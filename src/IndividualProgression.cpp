@@ -153,8 +153,12 @@ void IndividualProgression::UpdateAccountReputation(uint32 factionId, uint32 acc
 
     Group* group = player->GetGroup();
     uint32 account = player->GetSession()->GetAccountId();
+    std::string factionName = sFactionStore.LookupEntry(factionId)->name[0];
 
     if (!group)
+        return;
+
+    if (player->GetReputationRank(factionId) < REP_NEUTRAL) // don't increase rep unless the player is at least neutral with the faction
         return;
 
     uint32 curRep = player->GetReputationMgr().GetReputation(factionId);
@@ -166,22 +170,24 @@ void IndividualProgression::UpdateAccountReputation(uint32 factionId, uint32 acc
         if (!member || member->GetSession()->GetAccountId() != accountId)
             continue;
 
+        if (member->GetReputationRank(factionId) < REP_NEUTRAL)
+            continue;
+
         uint32 repAmount = member->GetReputationMgr().GetReputation(factionId);
 
         if (repAmount > newRep)
             newRep = repAmount;
     }
 
-    // ChatHandler(player->GetSession()).PSendSysMessage("Current {} Reputation = {}", factionId, curRep);
-    // ChatHandler(player->GetSession()).PSendSysMessage("Highest {} Reputation = {}", factionId, newRep);
+    ChatHandler(player->GetSession()).PSendSysMessage("Current {} Rep = {} ({})", factionId, curRep, factionName);
+    ChatHandler(player->GetSession()).PSendSysMessage("Highest {} Rep = {} ({})", factionId, newRep, factionName);
 
     if (newRep > curRep)
     {
-        std::string factionName = sFactionStore.LookupEntry(factionId)->name[0];
         uint32 addRep = newRep - curRep;
 
         player->GetReputationMgr().ModifyReputation(sFactionStore.LookupEntry(factionId), addRep);
-        ChatHandler(player->GetSession()).PSendSysMessage("Reputation with {} increased by {}.", factionName, addRep);
+        // ChatHandler(player->GetSession()).PSendSysMessage("Reputation with {} increased by {}.", factionName, addRep);
     }
 }
 
@@ -393,6 +399,7 @@ void IndividualProgression::checkIPPhasing(Player* player, uint32 newArea)
         case AREA_ISLE_OF_QUEL_DANAS:
         case AREA_MAGISTERS_TERRACE:
         case AREA_SHATTERED_SUN_STAGING:
+        case AREA_SILVERMOONS_PRIDE:
         case AREA_SUNS_REACH_SANCTUM:
         case AREA_SUNS_REACH_HARBOR:
         case AREA_SUNS_REACH_ARMORY:
@@ -792,10 +799,13 @@ void IndividualProgression::AwardEarnedVanillaPvpTitles(Player* player)
                 player->SetTitle(sCharTitlesStore.LookupEntry(title.TitleId));
                 highestTitle = title.TitleId;
 					
-                if (teamId == 0)
-                    player->SetByteValue(PLAYER_FIELD_BYTES, PLAYER_FIELD_BYTES_OFFSET_LIFETIME_MAX_PVP_RANK, title.TitleId + 4);
-                else // teamId == 1
-                    player->SetByteValue(PLAYER_FIELD_BYTES, PLAYER_FIELD_BYTES_OFFSET_LIFETIME_MAX_PVP_RANK, title.TitleId - 10);
+                constexpr int ALLIANCE_PVP_RANK_OFFSET = 4; // rank 1-4 are not used, need to add 4 to align with rank 1 = title ID 5
+                constexpr int HORDE_PVP_RANK_OFFSET = -10;  // horde titles start at ID 15, need to subtract 10 to align with rank 1 = title ID 5
+
+                if (teamId == TEAM_ALLIANCE)
+                    player->SetByteValue(PLAYER_FIELD_BYTES, PLAYER_FIELD_BYTES_OFFSET_LIFETIME_MAX_PVP_RANK, title.TitleId + ALLIANCE_PVP_RANK_OFFSET);
+                else // teamId == TEAM_HORDE
+                    player->SetByteValue(PLAYER_FIELD_BYTES, PLAYER_FIELD_BYTES_OFFSET_LIFETIME_MAX_PVP_RANK, title.TitleId - HORDE_PVP_RANK_OFFSET);
 							
                 break;
             }
@@ -869,6 +879,7 @@ private:
         sIndividualProgression->ExcludedAccountsEarnPvPTitles = sConfigMgr->GetOption<bool>("IndividualProgression.ExcludedAccountsEarnPvPTitles", false);
         sIndividualProgression->DisableRDF = sConfigMgr->GetOption<bool>("IndividualProgression.DisableRDF", false);
         sIndividualProgression->DisableQuestMarkers = sConfigMgr->GetOption<bool>("IndividualProgression.DisableQuestMarkers", true);
+        sIndividualProgression->MaxMonsterSight = sConfigMgr->GetOption<bool>("IndividualProgression.MaxMonsterSight", true);
         sIndividualProgression->excludeAccounts = sConfigMgr->GetOption<bool>("IndividualProgression.ExcludeAccounts", true);
         sIndividualProgression->excludedAccountsRegex = sConfigMgr->GetOption<std::string>("IndividualProgression.ExcludedAccountsRegex", "^RNDBOT.*");
         sIndividualProgression->EnableSetRepCommand = sConfigMgr->GetOption<bool>("IndividualProgression.EnableSetRepCommand", false);
@@ -917,6 +928,9 @@ public:
             sWorld->setBoolConfig(CONFIG_DBC_ENFORCE_ITEM_ATTRIBUTES, false);
         }
 
+        if (sIndividualProgression->MaxMonsterSight)
+            sWorld->setFloatConfig(CONFIG_SIGHT_MONSTER, 80.0f);
+        
         if (sIndividualProgression->DisableRDF)
             sWorld->setIntConfig(CONFIG_LFG_OPTIONSMASK, 4);
 
