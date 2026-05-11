@@ -21,13 +21,6 @@
 
 typedef std::unordered_map<uint32, uint32> questXpMapType;
 
-enum ProgressionLevelThreshold
-{
-    IP_LEVEL_VANILLA = 60,
-    IP_LEVEL_TBC     = 70,
-    IP_LEVEL_WOTLK   = 80
-};
-
 enum ProgressionBossIDs
 {
     RAGNAROS             = 11502,
@@ -48,7 +41,10 @@ enum ProgressionBossIDs
     HALION               = 39863,
     RHAHK_ZOR            = 644,
     SNEED                = 643,
-    GILNID               = 1763
+    GILNID               = 1763,
+    COLOSSUS_ZORA        = 15740,
+    COLOSSUS_REGAL       = 15741,
+    COLOSSUS_ASHI        = 15742
 };
 
 enum BuffSpells
@@ -83,7 +79,10 @@ enum ProgressionQuestIDs
     BATTLE_UNDERCITY_HORDE    = 13267,
     BATTLE_UNDERCITY_ALLIANCE = 13377,
     SIMPLY_BANG_A_GONG        = 108743,
-    CHAOS_AND_DESTRUCTION     = 108744
+    CHAOS_AND_DESTRUCTION     = 108744,
+    QUEST_COLOSSUS_ZORA       = 108745,
+    QUEST_COLOSSUS_REGAL      = 108746,
+    QUEST_COLOSSUS_ASHI       = 108747
 };
 
 enum WarEffortQuestIDs
