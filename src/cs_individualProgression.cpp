@@ -20,6 +20,7 @@ public:
             { "tele",   HandleTeleIndividualProgressionCommand,   SEC_GAMEMASTER,    Console::Yes },
             { "setbot", HandleSetBotIndividualProgressionCommand, SEC_GAMEMASTER,    Console::Yes },
             { "setrep", HandleSetRepIndividualProgressionCommand, SEC_GAMEMASTER,    Console::Yes },
+            { "pvp",    HandlePVPIndividualProgressionCommand,    SEC_GAMEMASTER,    Console::Yes },
         };
 
         static ChatCommandTable commandTable =
@@ -35,68 +36,38 @@ public:
         if (!currentState || (!progressionLevel && progressionLevel != 0) || !target || !target->IsInWorld())
             return;
 
+        static const std::unordered_map<uint8, uint32> bossMap =
+        {
+            { 0,  RAGNAROS_KILL     }, // 686
+            { 1,  ONYXIA_KILL       }, // 684
+            { 2,  NEFARIAN_KILL     }, // 685
+            { 5,  C_THUN_KILL       }, // 687
+            { 8,  MALCHEZAAR_KILL   }, // 690
+            { 9,  KAEL_THAS_KILL    }, // 696
+            { 10, ILLIDAN_KILL      }, // 697
+            { 12, KIL_JAEDEN_KILL   }, // 698
+            { 13, KEL_THUZAD_KILL   }, // 575
+            { 15, ANUB_ARAK_KILL    }, // 3916
+            { 16, LICH_KING_KILL    }, // 4597
+            { 17, HALION_KILL       }, // 4815
+        };
+
         uint16 playerGUID = target->GetGUID().GetCounter();
 
-        for (uint8 i = progressionLevel; i < currentState; ++i)
+        for (auto const& [progressionId, achievementId] : bossMap)
         {
-            if (i == 0 && target->HasAchieved(RAGNAROS_KILL)) // 686
-            {
-                sIndividualProgression->RemovePlayerAchievement(playerGUID, RAGNAROS_KILL);
-            }
-            else if (i == 1 && target->HasAchieved(ONYXIA_KILL)) // 684
-            {
-                sIndividualProgression->RemovePlayerAchievement(playerGUID, ONYXIA_KILL);
-            }
-            else if (i == 2 && target->HasAchieved(NEFARIAN_KILL)) // 685
-            {
-                sIndividualProgression->RemovePlayerAchievement(playerGUID, NEFARIAN_KILL);
-            }
-            else if (i == 5 && target->HasAchieved(C_THUN_KILL)) // 687
-            {
-                sIndividualProgression->RemovePlayerAchievement(playerGUID, C_THUN_KILL);
-            }
-            else if (i == 8 && target->HasAchieved(MALCHEZAAR_KILL)) //  690
-            {
-                sIndividualProgression->RemovePlayerAchievement(playerGUID, MALCHEZAAR_KILL);
-            }
-            else if (i == 9 && target->HasAchieved(KAEL_THAS_KILL)) // 696
-            {
-                sIndividualProgression->RemovePlayerAchievement(playerGUID, KAEL_THAS_KILL);
-            }
-            else if (i == 10 && target->HasAchieved(ILLIDAN_KILL)) // 697
-            {
-                sIndividualProgression->RemovePlayerAchievement(playerGUID, ILLIDAN_KILL);
-            }
-            else if (i == 11 && target->HasAchieved(ZUL_JIN_KILL)) // 691
-            {
-                sIndividualProgression->RemovePlayerAchievement(playerGUID, ZUL_JIN_KILL);
-            }
-            else if (i == 12 && target->HasAchieved(KIL_JAEDEN_KILL)) // 698
-            {
-                sIndividualProgression->RemovePlayerAchievement(playerGUID, KIL_JAEDEN_KILL);
-            }
-            else if (i == 13 && target->HasAchieved(KEL_THUZAD_KILL)) // 575
-            {
-                sIndividualProgression->RemovePlayerAchievement(playerGUID, KEL_THUZAD_KILL);
-            }
-            else if (i == 15 && target->HasAchieved(ANUB_ARAK_KILL)) // 3916
-            {
-                sIndividualProgression->RemovePlayerAchievement(playerGUID, ANUB_ARAK_KILL);
-            }
-            else if (i == 16 && target->HasAchieved(LICH_KING_KILL)) // 4597
-            {
-                sIndividualProgression->RemovePlayerAchievement(playerGUID, LICH_KING_KILL);
-            }
-            else if (i == 17 && target->HasAchieved(HALION_KILL)) // 4815
-            {
-                sIndividualProgression->RemovePlayerAchievement(playerGUID, HALION_KILL);
-            }
+            if (progressionId < progressionLevel || progressionId >= currentState)
+                continue;
+
+            if (target->HasAchieved(achievementId))
+                sIndividualProgression->RemovePlayerAchievement(playerGUID, achievementId);
         }
     }
 
     static bool HandleGetIndividualProgressionCommand(ChatHandler* handler, Optional<PlayerIdentifier> player)
     {
-        player = PlayerIdentifier::FromTargetOrSelf(handler);
+        if (!player)
+            player = PlayerIdentifier::FromTargetOrSelf(handler);
 
         if (!player)
         {
@@ -104,9 +75,15 @@ public:
             return false;
         }
 
+        std::string playername = player->GetName();
         Player* target = player->GetConnectedPlayer();
+        if (!target)
+        {
+            handler->PSendSysMessage("Player |cff00ffff{}|r is not online.", playername);
+            return false;
+        }
+
         uint32 progressionLevel = sIndividualProgression->GetPlayerProgressionFromQuests(target);
-        std::string playername = target->GetName();
 
         handler->PSendSysMessage("Progression Level for |cff00ffff{}|r = |cff00ffff{}|r", playername, progressionLevel);
         return true;
@@ -117,7 +94,7 @@ public:
 	    if (!progressionLevel && progressionLevel != 0)
             return false;
 
-        if (progressionLevel > PROGRESSION_WOTLK_TIER_5)
+        if ((progressionLevel > PROGRESSION_WOTLK_TIER_5) || progressionLevel == 11)
         {
             handler->SendSysMessage("Invalid Progression Level.");
             return false;
@@ -371,7 +348,13 @@ public:
             {
                 if (sIndividualProgression->isAttuned(target))
                 {
-                    target->SetRaidDifficulty(RAID_DIFFICULTY_10MAN_HEROIC);
+                    Group* group = target->GetGroup();
+
+                    if (group)
+                        group->SetRaidDifficulty(RAID_DIFFICULTY_10MAN_HEROIC);
+                    else
+                        target->SetRaidDifficulty(RAID_DIFFICULTY_10MAN_HEROIC);
+
                     target->TeleportTo(533, 3005.51f, -3434.64f, 304.195f, 6.2831f);
                     return true;
                 }
@@ -393,7 +376,13 @@ public:
             {
                 if (target->HasItemCount(ITEM_DRAKEFIRE_AMULET))
                 {
-                    target->SetRaidDifficulty(RAID_DIFFICULTY_10MAN_HEROIC);
+                    Group* group = target->GetGroup();
+
+                    if (group)
+                        group->SetRaidDifficulty(RAID_DIFFICULTY_10MAN_HEROIC);
+                    else
+                        target->SetRaidDifficulty(RAID_DIFFICULTY_10MAN_HEROIC);
+                   
                     target->TeleportTo(249, 29.1607f, -71.3372f, -8.18032f, 4.58f);
                     return true;
                 }
@@ -411,6 +400,99 @@ public:
         }
 
         return false;
+    }
+
+    static bool HandlePVPIndividualProgressionCommand(ChatHandler* handler, Optional<PlayerIdentifier> player)
+    {
+        if (!player)
+            player = PlayerIdentifier::FromTargetOrSelf(handler);
+
+        if (!player)
+        {
+            handler->SendSysMessage("Player not found.");
+            return false;
+        }
+
+        std::string playername = player->GetName();
+        Player* target = player->GetConnectedPlayer();
+        if (!target)
+        {
+            handler->PSendSysMessage("Player |cff00ffff{}|r is not online.", playername);
+            return false;
+        }
+
+        uint32 kills = target->GetUInt32Value(PLAYER_FIELD_LIFETIME_HONORABLE_KILLS);
+        TeamId teamId = target->GetTeamId(true);
+
+        IppPvPTitles const pvpTitlesList[14] =
+        {
+            { sIndividualProgression->VanillaPvpKillRank14, TitleData[RANK_FOURTEEN].TitleId[teamId] },
+            { sIndividualProgression->VanillaPvpKillRank13, TitleData[RANK_THIRTEEN].TitleId[teamId] },
+            { sIndividualProgression->VanillaPvpKillRank12, TitleData[RANK_TWELVE].TitleId[teamId]   },
+            { sIndividualProgression->VanillaPvpKillRank11, TitleData[RANK_ELEVEN].TitleId[teamId]   },
+            { sIndividualProgression->VanillaPvpKillRank10, TitleData[RANK_TEN].TitleId[teamId]      },
+            { sIndividualProgression->VanillaPvpKillRank9,  TitleData[RANK_NINE].TitleId[teamId]     },
+            { sIndividualProgression->VanillaPvpKillRank8,  TitleData[RANK_EIGHT].TitleId[teamId]    },
+            { sIndividualProgression->VanillaPvpKillRank7,  TitleData[RANK_SEVEN].TitleId[teamId]    },
+            { sIndividualProgression->VanillaPvpKillRank6,  TitleData[RANK_SIX].TitleId[teamId]      },
+            { sIndividualProgression->VanillaPvpKillRank5,  TitleData[RANK_FIVE].TitleId[teamId]     },
+            { sIndividualProgression->VanillaPvpKillRank4,  TitleData[RANK_FOUR].TitleId[teamId]     },
+            { sIndividualProgression->VanillaPvpKillRank3,  TitleData[RANK_THREE].TitleId[teamId]    },
+            { sIndividualProgression->VanillaPvpKillRank2,  TitleData[RANK_TWO].TitleId[teamId]      },
+            { sIndividualProgression->VanillaPvpKillRank1,  TitleData[RANK_ONE].TitleId[teamId]      },
+        };
+
+        int highestTitle = -1;
+        int nextPvPRank = -1;
+        uint32 killsForNextRank = 0;
+        uint32 killsToNextRank = 0;
+
+        constexpr int ALLIANCE_PVP_RANK_OFFSET = 1;
+        constexpr int HORDE_PVP_RANK_OFFSET = 14;  // horde titles start at ID 15
+
+        for (IppPvPTitles title : pvpTitlesList)
+        {
+            if (kills >= title.RequiredKills)
+            {
+                highestTitle = title.TitleId;
+                break;
+            }
+            else
+            {
+                killsForNextRank = title.RequiredKills;
+                nextPvPRank = title.TitleId;
+            }
+        }
+
+        if (killsForNextRank > 0)
+            killsToNextRank = killsForNextRank - kills;
+
+        if (nextPvPRank == -1)
+        {
+            handler->PSendSysMessage("|cff00ffff{}|r has achieved the highest PvP rank and currently has {} honorable kills.", playername, kills);
+            return true;
+        }
+        else if (highestTitle == -1)
+        {
+            handler->PSendSysMessage("|cff00ffff{}|r has not achieved any PvP rank and currently has {} honorable kills.", playername, kills);
+            handler->PSendSysMessage("|cff00ffff{}|r needs {} more honorable kills for rank 1.", playername, killsToNextRank);
+            return true;
+        }
+        else
+        {
+            if (teamId == TEAM_ALLIANCE)
+            {
+                handler->PSendSysMessage("PvP rank for |cff00ffff{}|r = |cff00ffff{}|r", playername, highestTitle + ALLIANCE_PVP_RANK_OFFSET);
+                handler->PSendSysMessage("|cff00ffff{}|r needs {} more honorable kills for rank {}.", playername, killsToNextRank, nextPvPRank + ALLIANCE_PVP_RANK_OFFSET);
+                return true;
+            }
+            else // teamId == TEAM_HORDE
+            {
+                handler->PSendSysMessage("PvP rank for |cff00ffff{}|r = |cff00ffff{}|r", playername, highestTitle - HORDE_PVP_RANK_OFFSET);
+                handler->PSendSysMessage("|cff00ffff{}|r needs {} more honorable kills for rank {}.", playername, killsToNextRank, nextPvPRank - HORDE_PVP_RANK_OFFSET);
+                return true;
+            }
+        }
     }
 };
 

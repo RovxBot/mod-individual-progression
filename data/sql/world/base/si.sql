@@ -150,7 +150,7 @@ INSERT INTO `creature_template` (`entry`, `difficulty_entry_1`, `difficulty_entr
 --
 (@NECROTIC_SHARD, 0, 0, 0, 0, 0, 'Necrotic Shard', NULL, NULL, 0, 70, 70, 0, 1630, 0, 1, 1, 1, 1, 0, 0, 0, 1, 2000, 2000, 1, 1, 1, 260, 2048, 0, 0, 10, 1024, 0, 0, 0, 0, 0, 0, 0, '', 0, 1, 0.75, 1, 0, 1, 0, 0, 1, 0, 2, '', 0),
 (@SHADOW_OF_DOOM, 0, 0, 0, 0, 0, 'Shadow of Doom', '', NULL, 0, 60, 60, 0, 2145, 0, 1, 1.14286, 1, 1, 4, 1, 0, 9, 2000, 2000, 1, 1, 2, 0, 2048, 0, 0, 6, 0, 16143, 0, 0, 0, 0, 186, 615, '', 0, 1, 20, 1, 1, 1, 0, 0, 1, -114, 0, '', 0),
-(@CULTIST_ENGINEER, 0, 0, 0, 0, 0, 'Cultist Engineer', '', NULL, 66000, 60, 60, 0, 190, 1, 1, 1.14286, 1, 1, 18, 0, 0, 0.05, 2000, 2000, 1, 1, 1, 514, 2048, 0, 0, 10, 0, 0, 0, 0, 0, 0, 0, 0, '', 1, 1, 1, 1, 1, 0.25, 0, 0, 1, -2, 0, '', 0),
+(@CULTIST_ENGINEER, 0, 0, 0, 0, 0, 'Cultist Engineer', '', NULL, 66000, 60, 60, 0, 190, 1, 1, 1.14286, 1, 1, 18, 0, 0, 0.05, 2000, 2000, 1, 1, 1, 514, 2048, 0, 0, 10, 0, 0, 0, 0, 0, 0, 0, 0, '', 1, 1, 1, 1, 1, 0.25, 0, 0, 1, -2, 2, '', 0),
 (@GHOUL_BERSERKER, 0, 0, 0, 0, 0, 'Ghoul Berserker', NULL, NULL, 0, 59, 60, 0, 1630, 0, 0.777776, 1.14286, 1, 1, 4, 0, 0, 1, 2000, 2000, 1, 1, 1, 0, 2048, 0, 0, 6, 0, 16141, 0, 0, 0, 0, 144, 659, '', 0, 1, 2.7, 1, 1, 1, 0, 0, 1, -93, 0, '', 0),
 (@SPECTRAL_SOLDIER, 0, 0, 0, 0, 0, 'Spectral Soldier', '', NULL, 0, 59, 60, 0, 1630, 0, 1.11111, 1.14286, 1, 1, 4, 0, 0, 1, 2000, 2000, 1, 1, 1, 0, 2048, 0, 0, 6, 0, 16298, 0, 0, 0, 0, 148, 660, '', 1, 1, 2.7, 1, 1.05, 1, 0, 0, 1, -93, 0, '', 0),
 (@SKELETAL_SHOCKTROOPER, 0, 0, 0, 0, 0, 'Skeletal Shocktrooper', '', NULL, 0, 59, 60, 0, 1630, 0, 1, 1.19048, 1, 1, 4, 0, 0, 1, 2000, 2000, 1, 1, 1, 0, 2048, 0, 0, 6, 0, 16299, 0, 0, 0, 0, 144, 658, '', 1, 1, 2.7, 1, 1, 1, 0, 0, 1, -122, 2048, '', 0),
@@ -479,7 +479,7 @@ UPDATE `creature_template` SET `unit_flags` = 512 WHERE `entry` IN (@ARGENT_OUTF
 UPDATE `creature_template` SET `npcflag` = 2 WHERE `entry` IN (@ARGENT_RECRUITER, @ARGENT_SCOUT);
     
 -- Cultist Engineer
-UPDATE `creature_template` SET `gossip_menu_id` = 66000, `npcflag` = 1, `unit_flags` = 514, `flags_extra` = 4194304 WHERE `entry` = @CULTIST_ENGINEER;
+UPDATE `creature_template` SET `gossip_menu_id` = 66000, `npcflag` = 1, `unit_flags` = 514, `flags_extra` = 2 WHERE `entry` = @CULTIST_ENGINEER;
 
 -- Lumbering Horror, fix movement
 UPDATE `creature_template` SET `unit_flags` = 0, `HealthModifier` = 5.4 WHERE `entry` = @LUMBERING_HORROR;
@@ -603,8 +603,10 @@ INSERT INTO `smart_scripts` (`entryorguid`, `source_type`, `id`, `link`, `event_
 (@SCORN, 0, 0, 0, 106, 0, 100, 0, 4000, 9000, 8000, 15000, 0, 10, 11, 14907, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0,                 'Scorn - In Combat - Cast Frost Nova'),
 (@SCORN, 0, 1, 0, 0, 0, 100, 0, 5000, 10000, 13000, 21000, 0, 0, 11, 8398, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0,                   'Scorn - In Combat - Cast Frostbolt Volley'),
 (@SCORN, 0, 2, 0, 0, 0, 100, 0, 2000, 5000, 12000, 15000, 0, 0, 11, 28873, 1, 0, 0, 0, 0, 5, 5, 0, 0, 0, 0, 0, 0, 0,                   'Scorn - In Combat - Cast Lich Slap'),
-(@SCORN, 0, 3, 0, 11, 0, 100, 0, 0, 0, 0, 0, 0, 0, 232, 146930, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0,                              'Scorn - On Respawn - Start Patrol Path'),
-(@SCORN, 0, 4, 0, 37, 0, 100, 0, 0, 0, 0, 0, 0, 0, 41, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0,                                    'Scorn - On AI Init - Despawn Self '),
+-- (@SCORN, 0, 3, 0, 11, 0, 100, 0, 0, 0, 0, 0, 0, 0, 232, 146930, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0,                           'Scorn - On Respawn - Start Patrol Path'),
+-- (@SCORN, 0, 4, 0, 37, 0, 100, 0, 0, 0, 0, 0, 0, 0, 41, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0,                                 'Scorn - On AI Init - Despawn Self '),
+(@SCORN, 0, 3, 4, 11, 0, 100, 0, 0, 0, 0, 0, 0, 0, 47, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0,                                    'Scorn - On Respawn - Set Invisible'),
+(@SCORN, 0, 4, 0, 61, 0, 100, 0, 0, 0, 0, 0, 0, 0, 2, 35, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0,                                    'Scorn - On Respawn - Set Faction Friendly'),
 (@LORD_BLACKWOOD, 0, 0, 0, 9, 0, 100, 0, 0, 0, 7000, 11000, 5, 30, 11, 21390, 0, 0, 0, 0, 0, 25, 30, 0, 0, 0, 0, 0, 0, 0,              'Lord Blackwood - On Victim In Range - Cast Multi-Shot'), 
 (@LORD_BLACKWOOD, 0, 1, 0, 0, 0, 100, 0, 2000, 5000, 12000, 15000, 0, 0, 11, 11972, 1, 0, 0, 0, 0, 5, 5, 0, 0, 0, 0, 0, 0, 0,          'Lord Blackwood - In Combat - Cast Shield Bash'),
 (@LORD_BLACKWOOD, 0, 2, 0, 106, 0, 100, 0, 13000, 13000, 15000, 15000, 0, 5, 11, 7964, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0,       'Lord Blackwood - In Combat - Cast Smoke Bomb'),

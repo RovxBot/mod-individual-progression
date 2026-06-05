@@ -25,12 +25,6 @@ public:
         if (!player || !player->IsInWorld())
             return;
 
-        if (!sIndividualProgression->isBotAccount(player) || sIndividualProgression->BotAccountsEarnPvPTitles)
-        {
-            sIndividualProgression->AwardEarnedVanillaPvpTitles(player);
-            sIndividualProgression->CleanUpVanillaPvpTitles(player);
-        }
-
         if (!sIndividualProgression->isNormalAccount(player)) // bot or exluded account
         {
             if (player->GetLevel() <= 60)
@@ -56,9 +50,10 @@ public:
             {
                 sIndividualProgression->UpdateProgressionState(player, static_cast<ProgressionState>(sIndividualProgression->startingProgression));
             }
+
+            sIndividualProgression->checkIPProgression(player);
         }
 
-        sIndividualProgression->checkIPProgression(player);
         sIndividualProgression->CheckAdjustments(player);
 
         if (sIndividualProgression->enabled)
@@ -78,6 +73,12 @@ public:
         if (sIndividualProgression->isNormalAccount(player))
             sIndividualProgression->checkIPProgression(player);
 
+        if (!sIndividualProgression->isBotAccount(player) || sIndividualProgression->BotAccountsEarnPvPTitles)
+        {
+            sIndividualProgression->AwardEarnedVanillaPvpTitles(player);
+            sIndividualProgression->CleanUpVanillaPvpTitles(player);
+        }
+        
         sIndividualProgression->CheckAdjustments(player);
     }
 
@@ -184,7 +185,7 @@ public:
             return false;
     }
 
-    void OnPlayerSpellCast(Player* player, Spell* spell, bool skipCheck) override
+    void OnPlayerSpellCast(Player* player, Spell* spell, bool /*skipCheck*/) override
     {
         if (!sIndividualProgression->enabled || !player || !player->IsInWorld() || !spell)
             return;
@@ -678,13 +679,57 @@ public:
                 return false;
             }
         }
-        if (mapid == MAP_ZUL_AMAN && !sIndividualProgression->hasPassedProgression(player, PROGRESSION_TBC_TIER_3))
+        if (mapid == MAP_ZUL_AMAN)
         {
-            ChatHandler(player->GetSession()).PSendSysMessage("Progression Level Required = |cff00ffff{}|r", PROGRESSION_TBC_TIER_3);
-            return false;
+            uint32 PLAYER_PROGRESSION = sIndividualProgression->GetPlayerProgressionFromQuests(player);
+            ProgressionState REQUIRED_ZA_PROGRESSION = static_cast<ProgressionState>(sIndividualProgression->RequiredZulAmanProgression);
+
+            if (PLAYER_PROGRESSION < REQUIRED_ZA_PROGRESSION)
+            {
+                ChatHandler(player->GetSession()).PSendSysMessage("Progression Level Required = |cff00ffff{}|r", REQUIRED_ZA_PROGRESSION);
+                return false;
+            }
         }
         if (mapid == MAP_NORTHREND && !sIndividualProgression->hasPassedProgression(player, PROGRESSION_TBC_TIER_5))
         {
+            const uint16 AREA_COLD_HEARTH_MANOR = 166;
+            const uint16 AREA_DRYGULCH_RAVINE = 370;
+            const uint16 AREA_STORMWIND_GREAT_SEA = 2364;
+            const uint16 AREA_WETLANDS_GREAT_SEA = 2365;
+            const uint16 AREA_STORMWIND_HARBOR = 4411;
+
+            uint16 NPC_DEATHGUARD_BARTH = 31708; // Zeppelin Crewman in Tirisfal Glades
+            uint16 NPC_GRUNT_GRITCH = 31726; // Zeppelin Crewman in Durotar
+            uint16 NPC_SAILOR_JANSEN = 31759;
+            uint16 NPC_SAILOR_DAVIES = 31761;
+            uint16 NPC_SAILOR_PICARDO = 31792;
+
+            switch (player->GetAreaId())
+            {
+            case AREA_STORMWIND_GREAT_SEA:
+                if (player->FindNearestCreature(NPC_SAILOR_PICARDO, 80.0f))
+                    player->TeleportTo(0, -8290.685f, 1395.097f, 4.851f, 0); // Stormwind Harbor
+                break;
+            case AREA_STORMWIND_HARBOR:
+                if (player->FindNearestCreature(NPC_SAILOR_JANSEN, 60.0f) || player->FindNearestCreature(NPC_SAILOR_DAVIES, 40.0f))
+                    player->TeleportTo(0, -8641.461f, 1322.536f, 5.537f, 0); // Stormwind Harbor
+                break;
+            case AREA_WETLANDS_GREAT_SEA:
+                if (player->FindNearestCreature(NPC_SAILOR_JANSEN, 60.0f) || player->FindNearestCreature(NPC_SAILOR_DAVIES, 40.0f))
+                    player->TeleportTo(0, -3730.277f, -584.316f, 4.7365f, 0); // Menethil Harbor
+                break;
+            case AREA_DUROTAR:
+            case AREA_DRYGULCH_RAVINE:
+                if (player->FindNearestCreature(NPC_GRUNT_GRITCH, 40.0f))
+                    player->TeleportTo(1, 1174.13f, -4152.37f, 51.746f, 0); // Durotar Zeppelin Master
+                break;
+            case AREA_TIRISFAL_GLADES:
+            case AREA_COLD_HEARTH_MANOR:
+                if (player->FindNearestCreature(NPC_DEATHGUARD_BARTH, 40.0f))
+                    player->TeleportTo(0, 2060.0942f, 361.5912f, 82.5f, 0); // Tirisfal Glades Zeppelin Master
+                break;
+            }
+
             ChatHandler(player->GetSession()).PSendSysMessage("Progression Level Required = |cff00ffff{}|r", PROGRESSION_TBC_TIER_5);
             return false;
         }
@@ -1107,11 +1152,40 @@ public:
         if (killed->GetCreatureTemplate()->rank > CREATURE_ELITE_NORMAL)
         {
             Group* group = killer->GetGroup();
-
-            if (!group)
-                return;
-
+            
             if (killed->GetEntry() == COLOSSUS_ZORA || killed->GetEntry() == COLOSSUS_REGAL || killed->GetEntry() == COLOSSUS_ASHI)
+            {
+                // no group
+                if (killed->GetEntry() == COLOSSUS_ZORA)
+                    killer->CompleteQuest(QUEST_COLOSSUS_ZORA);
+                else if (killed->GetEntry() == COLOSSUS_REGAL)
+                    killer->CompleteQuest(QUEST_COLOSSUS_REGAL);
+                else if (killed->GetEntry() == COLOSSUS_ASHI)
+                    killer->CompleteQuest(QUEST_COLOSSUS_ASHI);    
+               
+                if (group)
+                {
+                    for (GroupReference* itr = group->GetFirstMember(); itr != nullptr; itr = itr->next())
+                    {
+                        Player* member = itr->GetSource();
+                        if (!member || !sIndividualProgression->isNormalAccount(member))
+                            continue;
+
+                        if (killed->GetEntry() == COLOSSUS_ZORA)
+                            member->CompleteQuest(QUEST_COLOSSUS_ZORA);
+                        else if (killed->GetEntry() == COLOSSUS_REGAL)
+                            member->CompleteQuest(QUEST_COLOSSUS_REGAL);
+                        else if (killed->GetEntry() == COLOSSUS_ASHI)
+                            member->CompleteQuest(QUEST_COLOSSUS_ASHI);
+                    }
+                }
+
+                return;
+            }
+
+            sIndividualProgression->checkKillProgression(killer, killed); // no group
+
+            if (group)
             {
                 for (GroupReference* itr = group->GetFirstMember(); itr != nullptr; itr = itr->next())
                 {
@@ -1119,26 +1193,9 @@ public:
                     if (!member || !sIndividualProgression->isNormalAccount(member))
                         continue;
 
-                    if (killed->GetEntry() == COLOSSUS_ZORA)
-                        member->CompleteQuest(QUEST_COLOSSUS_ZORA);
-                    else if (killed->GetEntry() == COLOSSUS_REGAL)
-                        member->CompleteQuest(QUEST_COLOSSUS_REGAL);
-                    else if (killed->GetEntry() == COLOSSUS_ASHI)
-                        member->CompleteQuest(QUEST_COLOSSUS_ASHI);
+                    if (killer->IsAtLootRewardDistance(member))
+                        sIndividualProgression->checkKillProgression(member, killed);
                 }
-                return;
-            }
-
-            sIndividualProgression->checkKillProgression(killer, killed);
-
-            for (GroupReference* itr = group->GetFirstMember(); itr != nullptr; itr = itr->next())
-            {
-                Player* member = itr->GetSource();
-                if (!member || !sIndividualProgression->isNormalAccount(member))
-                    continue;
-
-                if (killer->IsAtLootRewardDistance(member))
-                    sIndividualProgression->checkKillProgression(member, killed);
             }
         }
     }
@@ -1157,27 +1214,33 @@ public:
         return true;
     }
 
-    void OnPlayerUpdateArea(Player* player, uint32 /*oldArea*/, uint32 newArea) override
+    void OnPlayerUpdateArea(Player* player, uint32 oldArea, uint32 newArea) override
     {
-        if (!player || !player->IsInWorld() || !newArea)
+        if (!player || !player->IsInWorld() || !newArea || !oldArea)
             return;
 
-        if (!sIndividualProgression->enabled || player->IsGameMaster() || !sIndividualProgression->isNormalAccount(player))
+        if (!sIndividualProgression->enabled || player->IsGameMaster())
+            return;
+
+        if (newArea == oldArea)
             return;
 
         uint32 mapid = player->GetMap()->GetId();
 
         if (mapid && mapid == MAP_OUTLAND) // prevent entering Sun's Reach Harbor in Quel'Danas without proper progression
         {
-            if (!sIndividualProgression->hasPassedProgression(player, PROGRESSION_TBC_TIER_4) && newArea == 4087) // Sun's Reach Harbor
+            if (sIndividualProgression->isNormalAccount(player))
             {
-                ChatHandler(player->GetSession()).PSendSysMessage("Progression Level Required = |cff00ffff{}|r", PROGRESSION_TBC_TIER_4);
+                if (!sIndividualProgression->hasPassedProgression(player, PROGRESSION_TBC_TIER_4) && newArea == 4087) // Sun's Reach Harbor
+                {
+                    ChatHandler(player->GetSession()).PSendSysMessage("Progression Level Required = |cff00ffff{}|r", PROGRESSION_TBC_TIER_4);
 
-                TeamId teamId = player->GetTeamId(true);
-                if (teamId == TEAM_ALLIANCE)
-                    player->TeleportTo(0, 2270.32f, -5341.56f, 87, 1.34946f); // Light's Hope Chapel
-                else // Horde
-                    player->TeleportTo(530, 9373.69f, -7168.46f, 9.17572f, 1.04876f); // Eversong Woods
+                    TeamId teamId = player->GetTeamId(true);
+                    if (teamId == TEAM_ALLIANCE)
+                        player->TeleportTo(0, 2270.32f, -5341.56f, 87, 1.34946f); // Light's Hope Chapel
+                    else // Horde
+                        player->TeleportTo(530, 9373.69f, -7168.46f, 9.17572f, 1.04876f); // Eversong Woods
+                }
             }
         }
 
